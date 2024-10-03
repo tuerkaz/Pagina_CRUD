@@ -12,7 +12,7 @@ conn = MySQLdb.connect(
 cursor = conn.cursor()
 
 # Inicialización de Flask
-app = Flask(__crud__)
+app = Flask(__name__)
 
 # Lista de enlaces
 enlaces = [
