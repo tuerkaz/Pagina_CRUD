@@ -1,8 +1,9 @@
-import os
+# Librerías
 from flask import Flask, render_template, request
-import MySQLdb # mysqlclient
+import MySQLdb
+import os
 
-# Conexión a la base de datos usando variables de entorno
+# Conexión a la base de datos
 conn = MySQLdb.connect(
     host=os.getenv('DB_HOST', 'bzhahp9gear4wppnvuw8-mysql.services.clever-cloud.com'),
     user=os.getenv('DB_USER', 'uenogooku1xj27kq'),
@@ -23,6 +24,7 @@ enlaces = [
     {"url": "/delete", "texto": "Delete"}
 ]
 
+# Función para obtener los nombres de las columnas de la tabla 'Employes'
 def nombre_Columnas():
     cursor.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Employes' ORDER BY ORDINAL_POSITION")
     columns_DB = [column[0] for column in cursor.fetchall()]
@@ -35,104 +37,49 @@ def init():
     return render_template('index.html', enlaces=enlaces_filtrados)
 
 # Ruta de creación
-@app.route('/create')
+@app.route('/create', methods=['GET', 'POST'])
 def create():
-    enlaces_filtrados = [enlace for enlace in enlaces if enlace["url"] != "/create"]
-    return render_template('create.html', enlaces=enlaces_filtrados)
+    if request.method == 'POST':
+        # Obtener datos del formulario
+        name = request.form['name']
+        last_name = request.form['last-name']
+        document = request.form['document']
+        address = request.form['address']
+        cell = request.form['cell-phone']
+        
+        # Insertar en la base de datos
+        cursor.execute("""INSERT INTO Employes (Nombre, Apellido, Documento, Direccion, Telefono)
+                          VALUES (%s, %s, %s, %s, %s)""", (name, last_name, document, address, cell))
+        conn.commit()
 
-# Procesar creación de datos (protección SQL injection)
-@app.route('/procesar', methods=['POST'])
-def data_create():
-    name = request.form['name']
-    last_name = request.form['last-name']
-    document = request.form['document']
-    address = request.form['address']
-    cell = request.form['cell-phone']
-    photo = request.form['photo']
+        return "Registro creado con éxito"
     
-    cursor.execute("""INSERT INTO Employes (Nombre, Apellido, Documento, Direccion, Telefono, Foto)
-                      VALUES (%s, %s, %s, %s, %s, %s);""", (name, last_name, document, address, cell, photo))
-    conn.commit()
-    return create()
+    return render_template('create.html')
 
 # Ruta de lectura
 @app.route('/read')
-def read(condition_fulfied="", tabla=""):
-    enlaces_filtrados = [enlace for enlace in enlaces if enlace["url"] != "/read"]
-    columns_DB = nombre_Columnas()
-    if condition_fulfied == "":
-        cursor.execute("SELECT * FROM Employes")
-        tabla = cursor.fetchall()
-    else:
-        tabla = condition_fulfied
-    return render_template('read.html', enlaces=enlaces_filtrados, columns_DB=columns_DB, tabla=tabla)
-
-# Filtrar por columna
-@app.route('/column_selection', methods=['POST'])
-def column_select():
-    column = request.form['selection']
-    condition_record = request.form['condition_record']
-    if condition_record != "":
-        cursor.execute("SELECT * FROM Employes WHERE %s = %s", (column, condition_record))
-    else:
-        cursor.execute("SELECT * FROM Employes")
-    condition_fulfied = cursor.fetchall()
-    return read(condition_fulfied=condition_fulfied)
-
-# Ruta de actualización
-@app.route('/update')
-def update(column="", id="", a=True):
-    enlaces_filtrados = [enlace for enlace in enlaces if enlace["url"] != "/update"]
+def read():
     columns_DB = nombre_Columnas()
     cursor.execute("SELECT * FROM Employes")
     tabla = cursor.fetchall()
-    return render_template('update.html', enlaces=enlaces_filtrados, columns_DB=columns_DB, tabla=tabla, column=column, id=id, a=a)
+    return render_template('read.html', columns_DB=columns_DB, tabla=tabla)
 
-# Seleccionar columna para modificar
-@app.route('/selection_modify', methods=['POST'])
-def selection_modify():
-    id = request.form['id_selection']
-    column = request.form['selection']
-    return update(column=column, id=id)
-
-# Reemplazar valor en la base de datos (protección SQL injection)
-@app.route('/remplace_value', methods=['POST'])
-def remplace_value():
-    new_value = request.form['new_value']
-    id = request.form['id']
-    column = request.form['column']
-    cursor.execute("UPDATE Employes SET %s = %s WHERE Id = %s", (column, new_value, id))
-    conn.commit()
-    return update()
+# Ruta de actualización
+@app.route('/update')
+def update():
+    return render_template('update.html')
 
 # Ruta de eliminación
 @app.route('/delete')
 def delete():
-    enlaces_filtrados = [enlace for enlace in enlaces if enlace["url"] != "/delete"]
-    columns_DB = nombre_Columnas()
-    cursor.execute("SELECT * FROM Employes")
-    tabla = cursor.fetchall()
-    return render_template('delete.html', enlaces=enlaces_filtrados, columns_DB=columns_DB, tabla=tabla)
+    return render_template('delete.html')
 
-# Seleccionar elemento a eliminar
-@app.route('/selection_delete', methods=['POST'])
-def selection_delete():
-    id_delete = request.form['id_delete']
-    cursor.execute("SELECT MAX(Id) FROM Employes")
-    max_id = cursor.fetchall()[0][0]
-    cursor.execute("DELETE FROM Employes WHERE Id = %s", (id_delete,))
-    cursor.execute("ALTER TABLE Employes AUTO_INCREMENT = %s", (max_id - 1,))
-    if int(id_delete) < max_id:
-        cursor.execute("UPDATE Employes SET Id = Id - 1 WHERE Id > %s", (id_delete,))
-    conn.commit()
-    return delete()
-
-# Cerrar la conexión a la base de datos cuando la aplicación finalice
+# Cerrar la conexión a la base de datos al final de la solicitud
 @app.teardown_appcontext
 def close_connection(exception):
     if conn:
         conn.close()
 
-# Ejecutar la aplicación
+# Iniciar la aplicación Flask
 if __name__ == "__main__":
-    app.run(debug=True, use_reloader=True)
+    app.run(debug=True, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
